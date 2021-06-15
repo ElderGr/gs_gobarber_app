@@ -6,13 +6,16 @@ import {
   Platform,
   TextInput,
   Alert,
+  PermissionsAndroid,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Form } from '@unform/mobile';
 import { FormHandles } from '@unform/core';
 import Icon from 'react-native-vector-icons/Feather';
+import * as ImagePicker from 'react-native-image-picker';
 
 import * as Yup from 'yup';
+import { useEffect } from 'react';
 import { useAuth } from '../../hooks/Auth';
 import api from '../../services/api';
 
@@ -48,6 +51,10 @@ const SignUp: React.FC = () => {
   const oldPasswordInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    console.log(user);
+  }, []);
 
   const handleSignUp = useCallback(
     async (data: ProfileFormData) => {
@@ -119,12 +126,67 @@ const SignUp: React.FC = () => {
         );
       }
     },
-    [navigation],
+    [navigation, updateUser],
   );
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
   }, [navigation]);
+
+  const handleUpdateAvatar = useCallback(async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: 'App Camera Permission',
+          message: 'App needs access to your camera ',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        ImagePicker.launchCamera(
+          {
+            mediaType: 'photo',
+          },
+          response => {
+            if (response.didCancel) {
+              return;
+            }
+
+            if (response.errorMessage) {
+              Alert.alert('Erro ao atualizar seu avatar.');
+              return;
+            }
+
+            // {"assets": [{"fileName": "rn_image_picker_lib_temp_30ac59c9-53cb-4480-a1b4-e703a644a0c0.jpg", "fileSize": 1570498, "height": 3096, "type": "image/jpeg", "uri": "file:///data/user/0/com.appgobarber/cache/rn_image_picker_lib_temp_30ac59c9-53cb-4480-a1b4-e703a644a0c0.jpg", "width": 4128}]}
+            const data = new FormData();
+
+            data.append('avatar', {
+              type: 'image/jpeg',
+              name: `${user.id}.jpg`,
+              uri: response.assets[0].uri,
+            });
+            console.log(data);
+            api
+              .patch('users/avatar', data)
+              .then(apiResponse => {
+                console.log(apiResponse);
+                updateUser(apiResponse.data);
+              })
+              .catch(err => {
+                console.log(err, 'erro');
+              });
+          },
+        );
+      } else {
+        Alert.alert('Permissão a camera negada');
+      }
+    } catch (err) {
+      console.warn(err.message);
+    }
+  }, [updateUser, user.id]);
 
   return (
     <>
@@ -142,7 +204,7 @@ const SignUp: React.FC = () => {
               <Icon name="chevron-left" size={24} color="#999591" />
             </BackButton>
 
-            <UserAvatarButton onPress={handleSignUp}>
+            <UserAvatarButton onPress={handleUpdateAvatar}>
               <UserAvatar source={{ uri: user.avatar_url }} />
             </UserAvatarButton>
             <View>
